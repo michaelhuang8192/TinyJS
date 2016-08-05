@@ -1,23 +1,25 @@
 
 var Events = require("events");
+var nextTick = process.nextTick;
 
 function TaskQueue(maxConcurrentTask, defaultTaskExecuter, numPriorities) {
 	Events.constructor.call(this);
 
 	this.inPendingCount = 0;
 	this.inProgressCount = 0;
-	this.maxConcurrentTask = Math.max(maxConcurrentTask || 0, 5);
-	this.defaultTaskExecuter = defaultTaskExecuter || function() {
+	this.maxConcurrentTask = Math.max(maxConcurrentTask || 0, 0);
+	this.defaultTaskExecuter = (defaultTaskExecuter || function() {
 		console.log("No Default task executer");
 		this.done();
-	};
+
+	}).bind(this);
 
 	this.numPriorities = Math.max(1, numPriorities || 0);
 	this._priorityList = [];
 	for(var i = 0; i < this.numPriorities; i++)
 		this._priorityList.push([]);
 
-	this.__timeout = null;
+	this.__schedule = __schedule.bind(this);
 }
 
 TaskQueue.prototype = Object.create(Events.prototype);
@@ -27,11 +29,11 @@ TaskQueue.prototype.add = function(task, executer, priority) {
 	priority = Math.min(Math.max(0, priority || 0), this.numPriorities - 1);
 	this._priorityList[priority].push({
 		task: task,
-		executer: executer,
+		executer: executer != null ? executer.bind(this) : this.defaultTaskExecuter,
 		ts: new Date().getTime()
 	});
 	this.inPendingCount++;
-	this.__scheduleAsync();
+	nextTick(this.__schedule);
 };
 
 TaskQueue.prototype.done = function() {
@@ -39,51 +41,23 @@ TaskQueue.prototype.done = function() {
 	this.__schedule();
 };
 
-TaskQueue.prototype.__scheduleAsync = function() {
-	if(this.__timeout !== null) return;
-
-	var _this = this;
-	this.__timeout = setTimeout(function() {
-		_this.__timeout = null;
-		_this.__schedule();
-	}, 0);
-};
-
-TaskQueue.prototype.__schedule = function() {
-	if(this.__timeout !== null) {
-		clearTimeout(this.__timeout);
-		this.__timeout = null;
-	}
-
+function __schedule() {
 	var priority = this.numPriorities - 1;
 	while(this.inPendingCount > 0 && this.inProgressCount < this.maxConcurrentTask) {
 		var queue = this._priorityList[priority--];
 		while(queue.length > 0 && this.inProgressCount < this.maxConcurrentTask) {
 			var taskDesc = queue.shift();
-			var executer = (taskDesc.executer || this.defaultTaskExecuter);
 
 			this.inPendingCount--;
 			this.inProgressCount++;
 
-			this.__execute(taskDesc.task, executer);
+			nextTick(taskDesc.executer, taskDesc.task);
 		}
 	}
 
-	if(this.inProgressCount == 0) {
-		var _this = this;
-		setTimeout(function() {
-			_this.emit("finish");
-		}, 0);
-	}
+	if(this.inProgressCount == 0)
+		this.emit("finish");
 };
-
-TaskQueue.prototype.__execute = function(task, executer) {
-	var _this = this;
-	setTimeout(function() {
-		executer.call(_this, task);
-	}, 0);
-};
-
 
 module.exports = exports = function(maxConcurrentTask, defaultTaskExecuter, numPriorities) {
 	return new TaskQueue(maxConcurrentTask, defaultTaskExecuter, numPriorities);
