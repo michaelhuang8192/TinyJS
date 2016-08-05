@@ -38,7 +38,13 @@ TaskQueue.prototype.add = function(task, executer, priority) {
 
 TaskQueue.prototype.done = function() {
 	this.inProgressCount--;
-	this.__schedule();
+
+	if(this.inPendingCount == 0 && this.inProgressCount == 0)
+		this.emit("finish");
+	
+	else if(this.inPendingCount)
+		this.__schedule();
+
 };
 
 function __schedule() {
@@ -54,9 +60,6 @@ function __schedule() {
 			nextTick(taskDesc.executer, taskDesc.task);
 		}
 	}
-
-	if(this.inProgressCount == 0)
-		this.emit("finish");
 };
 
 module.exports = exports = function(maxConcurrentTask, defaultTaskExecuter, numPriorities) {
