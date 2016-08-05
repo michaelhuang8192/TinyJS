@@ -7,7 +7,7 @@ function TaskQueue(maxConcurrentTask, defaultTaskExecuter, numPriorities) {
 
 	this.inPendingCount = 0;
 	this.inProgressCount = 0;
-	this.maxConcurrentTask = Math.max(maxConcurrentTask || 0, 0);
+	this.maxConcurrentTask = Math.max(maxConcurrentTask || 0, 1);
 	this.defaultTaskExecuter = (defaultTaskExecuter || function() {
 		console.log("No Default task executer");
 		this.done();
@@ -41,7 +41,7 @@ TaskQueue.prototype.done = function() {
 
 	if(this.inPendingCount == 0 && this.inProgressCount == 0)
 		this.emit("finish");
-	
+
 	else if(this.inPendingCount)
 		this.__schedule();
 
